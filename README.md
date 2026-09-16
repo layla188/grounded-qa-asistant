@@ -1,152 +1,62 @@
 # OrionWorks Grounded Q&A Assistant
 
-A Retrieval-Augmented Generation (RAG) application for answering questions about the **OrionWorks Employee Handbook & Operations Knowledge Base**.
+A complete **Retrieval-Augmented Generation (RAG)** application that answers employee questions using the **OrionWorks Employee Handbook & Operations Knowledge Base**.
 
-The system retrieves relevant information from the source PDF, reranks the retrieved passages, and generates a grounded answer using an LLM. Each answer includes the relevant source pages from the original document.
-
----
-
-## Project Overview
-
-Traditional keyword search may fail when a user's question uses different wording from the source document.
-
-For example, a user might ask:
-
-> Can I work from home during my first two months?
-
-While the handbook may state:
-
-> Employees within their first 60 days are not eligible for remote work.
-
-A semantic retrieval system can understand that these two statements refer to the same concept.
-
-This project uses **Retrieval-Augmented Generation (RAG)** to connect a language model with a specific knowledge base.
-
-Instead of relying only on the LLM's general knowledge, the system:
-
-1. Loads the OrionWorks PDF.
-2. Splits the document into smaller chunks.
-3. Converts the chunks into embeddings.
-4. Stores the embeddings in a FAISS vector store.
-5. Retrieves relevant chunks for a user question.
-6. Reranks the retrieved chunks using FlashRank.
-7. Sends the most relevant context to the LLM.
-8. Generates a grounded answer.
-9. Displays the source pages used for the answer.
+The system retrieves relevant information from the handbook, reranks the retrieved passages, generates an answer grounded only in the retrieved context, and displays the supporting PDF pages.
 
 ---
 
-# System Architecture
+## Overview
+
+The OrionWorks Grounded Q&A Assistant was built to demonstrate an end-to-end RAG workflow over a company knowledge base.
+
+Instead of relying on the language model's general knowledge, the application searches the OrionWorks handbook first and provides the relevant information to the LLM before generating an answer.
+
+This makes the assistant more suitable for questions involving:
+
+- Company policies
+- Annual leave
+- Hybrid and remote work
+- Procurement
+- Business travel
+- Expenses
+- IT support
+- Password and access policies
+- Information security
+- Learning and development
+- Internal mobility
+- Workplace safety
+- Escalation procedures
+
+---
+
+## How It Works
+
+The application follows this pipeline:
 
 ```text
-                    OrionWorks PDF
-                    Employee Handbook
-                           |
-                           v
-                  +-------------------+
-                  |    PDF Loader     |
-                  |    PyPDFLoader    |
-                  +---------+---------+
-                            |
-                            v
-                  +-------------------+
-                  |   Text Chunking   |
-                  | Recursive Splitter|
-                  +---------+---------+
-                            |
-                            v
-                  +-------------------+
-                  |    Embeddings     |
-                  | BGE-small-en-v1.5 |
-                  +---------+---------+
-                            |
-                            v
-                  +-------------------+
-                  |    FAISS Index    |
-                  |   Vector Store    |
-                  +---------+---------+
-                            |
-                     User Question
-                            |
-                            v
-                  +-------------------+
-                  | Semantic Retrieval|
-                  |      Top-K        |
-                  +---------+---------+
-                            |
-                            v
-                  +-------------------+
-                  |    FlashRank      |
-                  |     Reranker      |
-                  +---------+---------+
-                            |
-                            v
-                  +-------------------+
-                  |  Grounded Prompt  |
-                  | Context + Query   |
-                  +---------+---------+
-                            |
-                            v
-                  +-------------------+
-                  |       LLM         |
-                  |    OpenRouter     |
-                  +---------+---------+
-                            |
-                            v
-                  +-------------------+
-                  |   Final Answer    |
-                  |  + Source Pages   |
-                  +-------------------+
-```
-
----
-
-# Features
-
-## Grounded Question Answering
-
-The assistant answers questions using information retrieved from the OrionWorks knowledge base.
-
-The generation prompt instructs the model to:
-
-- Use only the provided context.
-- Avoid outside knowledge.
-- Avoid inventing policies.
-- Avoid inventing numbers.
-- Avoid inventing dates.
-- Avoid inventing contacts or exceptions.
-- State when the requested information is not available.
-
-This helps reduce hallucinations and keeps generated answers grounded in the source document.
-
----
-
-## Semantic Search
-
-The system uses embeddings instead of relying only on exact keyword matching.
-
-Both the document chunks and the user question are converted into vector representations.
-
-FAISS then searches for chunks that are semantically similar to the question.
-
----
-
-## Reranking
-
-The first retrieval stage returns multiple potentially relevant chunks.
-
-The retrieved chunks are then passed to **FlashRank**, which reranks them according to their relevance to the user's specific question.
-
-The pipeline is:
-
-```text
+OrionWorks PDF
+      |
+      v
+Document Loading
+      |
+      v
+Text Chunking
+      |
+      v
+BGE Embeddings
+      |
+      v
+FAISS Vector Store
+      |
+      v
 User Question
       |
       v
-FAISS Retrieval
+Semantic Retrieval
       |
       v
-Top 10 Candidates
+Top 10 Candidate Chunks
       |
       v
 FlashRank Reranking
@@ -155,14 +65,94 @@ FlashRank Reranking
 Top 4 Relevant Chunks
       |
       v
+Grounded Prompt
+      |
+      v
+OpenRouter LLM
+      |
+      v
+Answer + Source Pages
+```
+
+---
+
+# Features
+
+## Grounded Question Answering
+
+The assistant is instructed to answer using only the information retrieved from the OrionWorks knowledge base.
+
+The generation prompt prevents the model from intentionally relying on outside knowledge and instructs it not to invent:
+
+- Policies
+- Numbers
+- Dates
+- Approval requirements
+- Contacts
+- Exceptions
+
+If the answer is not available in the retrieved context, the assistant is instructed to respond:
+
+```text
+The information is not stated in the OrionWorks knowledge base.
+```
+
+---
+
+## Semantic Retrieval
+
+The application uses semantic search rather than relying only on exact keyword matches.
+
+For example, a user may ask:
+
+```text
+Can I work from home during my first month?
+```
+
+while the handbook states:
+
+```text
+Hybrid eligibility starts after 60 calendar days.
+```
+
+The embedding model represents both texts as vectors, allowing the retrieval system to identify that they refer to the same topic.
+
+---
+
+## Reranking
+
+The initial retrieval stage retrieves the 10 most semantically similar chunks from FAISS.
+
+These chunks are then passed through **FlashRank**, which reranks them based on their relevance to the exact user question.
+
+```text
+User Question
+      |
+      v
+FAISS
+      |
+      v
+Top 10
+      |
+      v
+FlashRank
+      |
+      v
+Top 4
+      |
+      v
 LLM
 ```
+
+This helps reduce irrelevant context before the answer is generated.
 
 ---
 
 ## Source Citations
 
-Each generated answer displays the PDF pages containing the supporting information.
+The system preserves page metadata from the original PDF.
+
+Each answer displays the PDF pages associated with the retrieved evidence.
 
 Example:
 
@@ -170,78 +160,81 @@ Example:
 Sources
 
 Page 3
-Page 7
 Page 4
+Page 7
 ```
 
-Users can also expand:
-
-```text
-View supporting information
-```
-
-to inspect the retrieved passages.
+Users can also open the **View supporting information** section to inspect the retrieved document passages.
 
 ---
 
 ## Conversational Interface
 
-The Streamlit application supports multiple questions in the same conversation.
+The Streamlit interface allows users to continue asking questions in the same conversation.
 
 Users can:
 
-- Ask a question.
-- Receive an answer.
-- Ask another question.
-- Ask follow-up questions.
-- Choose suggested questions.
-- Continue the conversation without starting a new chat.
-- Start a new conversation when needed.
+- Ask an initial question
+- Receive a grounded answer
+- Ask another question
+- Select suggested questions
+- Review source pages
+- Inspect supporting passages
+- Start a new conversation when needed
 
 ---
 
 # Knowledge Base
 
-The project uses a synthetic document:
+The system uses the:
 
 **OrionWorks Employee Handbook & Operations Knowledge Base**
 
-The knowledge base contains information about:
+OrionWorks is a fictional technology and professional-services company used for RAG testing.
+
+The handbook includes information about:
 
 - Company profile and contacts
 - Working hours and attendance
-- Annual leave and time off
+- Annual leave
+- Sick leave
+- Personal days
 - Hybrid and remote work
-- Business travel and expenses
-- Procurement and purchasing rules
-- IT accounts and passwords
-- Devices and software
-- Information security
-- Performance and learning
-- Internal mobility
+- Business travel
+- Hotel and meal limits
+- Procurement thresholds
+- Purchase Orders
+- Sole-source purchasing
+- IT accounts
+- Password rules
+- Multi-factor authentication
+- Phishing incidents
+- IT support priorities
+- Lost devices
+- Information classification
+- Generative AI usage
+- Performance reviews
+- Learning allowance
+- Internal job applications
 - Workplace safety
-- Incident reporting
-- Escalation procedures
+- Incident escalation
 - Frequently asked questions
-- Glossary
-
-The document also contains questions specifically designed to test RAG retrieval and grounding.
 
 ---
 
-# Technologies Used
+# Technology Stack
 
 | Technology | Purpose |
 |---|---|
 | Python | Main programming language |
-| Streamlit | User interface |
-| LangChain | RAG pipeline components |
-| PyPDF | PDF document loading |
+| Streamlit | Web application interface |
+| LangChain | RAG components and orchestration |
+| PyPDFLoader | PDF loading |
 | RecursiveCharacterTextSplitter | Document chunking |
-| Hugging Face | Embedding model |
-| BAAI/bge-small-en-v1.5 | Text embeddings |
+| Hugging Face | Embedding model integration |
+| BAAI/bge-small-en-v1.5 | Semantic embeddings |
 | FAISS | Vector similarity search |
-| FlashRank | Document reranking |
+| FlashRank | Passage reranking |
 | OpenRouter | LLM API |
 | python-dotenv | Environment variable management |
 
@@ -255,194 +248,187 @@ The project uses:
 BAAI/bge-small-en-v1.5
 ```
 
-The model was selected because:
+The model was selected because the OrionWorks knowledge base is written in English and the model provides strong lightweight semantic embeddings.
 
-- The current knowledge base is in English.
-- It provides semantic text embeddings.
-- It is relatively lightweight.
-- It can run locally.
-- It does not require an embedding API key.
-
-The generated embeddings have:
+The model produces:
 
 ```text
-384 dimensions
+384-dimensional vectors
 ```
 
-The ingestion script verifies the embedding dimension during execution.
+Embeddings are generated locally.
+
+This means an external embedding API is not required.
 
 ---
 
-# LLM
+# Document Processing
 
-The generation model is accessed through **OpenRouter** using an OpenAI-compatible API.
+The OrionWorks PDF contains:
 
-The model is configured through the `.env` file:
-
-```env
-LLM_MODEL=your_model_here
+```text
+9 pages
 ```
 
-This allows the generation model to be changed without modifying the main application code.
+After chunking with the current configuration, the system creates:
 
-The API key is also stored in `.env` and is never included directly in the source code.
+```text
+33 chunks
+```
 
----
-
-# RAG Pipeline
-
-## 1. Document Loading
-
-The PDF is loaded using:
+The chunking configuration is:
 
 ```python
-PyPDFLoader
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 150
 ```
-
-The loader preserves page information in the document metadata.
-
-This is important because the application uses this metadata to display source page citations.
 
 ---
 
-## 2. Document Chunking
+## Why Chunk the Document?
 
-The loaded document is split into smaller chunks using:
+Passing the entire PDF to the language model for every question would be inefficient.
+
+Instead, the document is split into smaller pieces.
+
+This allows the retrieval system to search only for the passages that are relevant to the user's question.
+
+---
+
+## Chunk Overlap
+
+The project uses:
 
 ```python
-RecursiveCharacterTextSplitter
+CHUNK_OVERLAP = 150
 ```
 
-Current configuration:
+This allows neighboring chunks to share some text.
 
-```text
-Chunk Size: 800
-Chunk Overlap: 150
-```
-
-The overlap helps preserve context when information is located near a chunk boundary.
-
-For the current OrionWorks PDF:
-
-```text
-Pages Loaded: 9
-Chunks Created: 33
-```
+Overlap helps preserve meaning when a policy, exception, or rule appears near a chunk boundary.
 
 ---
 
-## 3. Embedding Generation
+# Vector Search
 
-Each document chunk is converted into a vector using:
-
-```text
-BAAI/bge-small-en-v1.5
-```
-
-The vector represents the semantic meaning of the text.
-
----
-
-## 4. Vector Store
-
-The generated embeddings are stored in:
+The project uses:
 
 ```text
 FAISS
 ```
 
-FAISS allows efficient similarity search between the user's question and the document chunks.
+FAISS stores the embeddings generated from the handbook chunks.
 
-The local vector store is saved as:
+When a user submits a question:
 
-```text
-data/vectorstore/
-├── index.faiss
-└── index.pkl
+1. The question is converted into an embedding.
+2. FAISS compares the query vector with the stored document vectors.
+3. The most semantically similar chunks are returned.
+
+The project initially retrieves:
+
+```python
+RETRIEVAL_K = 10
 ```
 
 ---
 
-## 5. Retrieval
+# Reranking
 
-When a user asks a question, the question is converted into an embedding.
+The project uses FlashRank to perform a second retrieval stage.
 
-The embedding is compared with the vectors stored in FAISS.
+FAISS first returns 10 candidate chunks.
 
-The system retrieves:
+FlashRank then evaluates the relationship between the question and each candidate passage.
 
-```text
-Top 10 candidate chunks
+The final context contains:
+
+```python
+RERANK_TOP_N = 4
 ```
 
-These chunks are passed to the reranking stage.
-
----
-
-## 6. Reranking
-
-The retrieved chunks are passed to:
+Therefore:
 
 ```text
+FAISS Top 10
+     |
+     v
 FlashRank
+     |
+     v
+Best 4 Chunks
 ```
-
-FlashRank evaluates the relevance of each retrieved passage to the user's question.
-
-The system keeps:
-
-```text
-Top 4 reranked chunks
-```
-
-These chunks are then used as the main context for the LLM.
 
 ---
 
-## 7. Grounded Generation
+# Grounded Generation
 
-The retrieved passages are formatted with their page numbers and inserted into the prompt.
+The four reranked chunks are formatted into a context block and sent to the LLM together with the user's question.
 
-The prompt also contains the user's question.
-
-The LLM is instructed to answer only using the provided context.
-
-If the context does not contain enough information, the assistant is instructed to respond:
+The prompt follows rules similar to:
 
 ```text
-The information is not stated in the OrionWorks knowledge base.
+Use only the provided context.
+
+Do not use outside knowledge.
+
+Do not invent policies, numbers, dates,
+contacts, or exceptions.
+
+If the answer is not contained in the
+knowledge base, say that the information
+is not stated in the OrionWorks knowledge base.
 ```
 
-This helps prevent the model from filling missing information with unsupported assumptions.
+This is the grounding mechanism used by the application.
 
 ---
 
-# Example
+# LLM
 
-### Question
+The application accesses the generation model through **OpenRouter**.
+
+OpenRouter provides an OpenAI-compatible API, allowing the application to use LangChain's `ChatOpenAI` interface.
+
+The model is configured through the environment:
+
+```env
+LLM_MODEL=openrouter/free
+```
+
+or another supported OpenRouter model.
+
+This means the model can be changed without changing the main RAG code.
+
+---
+
+# Example Question
+
+### User
 
 ```text
 How many annual leave days does a full-time employee receive?
 ```
 
-### Answer
+### Assistant
 
 ```text
-A full-time employee receives 24 business days of paid annual
-leave per calendar year. New employees accrue leave monthly
-from their start date, and up to 5 unused annual leave days
-may be carried into the next calendar year, expiring on 31 March.
+A full-time employee receives 24 business days of paid
+annual leave per calendar year.
+
+New employees accrue annual leave monthly from their
+employment start date.
 ```
 
 ### Sources
 
 ```text
 Page 3
-Page 7
 Page 4
+Page 7
 ```
 
-The answer is generated using the retrieved handbook information.
+Users can expand the supporting information section to inspect the retrieved passages directly.
 
 ---
 
@@ -452,6 +438,7 @@ The answer is generated using the retrieved handbook information.
 grounded-qa-assistant/
 │
 ├── data/
+│   │
 │   ├── documents/
 │   │   └── orionworks_handbook.pdf
 │   │
@@ -479,16 +466,7 @@ grounded-qa-assistant/
 
 ## `src/config.py`
 
-Contains the main project configuration:
-
-- Embedding model
-- LLM model
-- OpenRouter API key
-- Chunk size
-- Chunk overlap
-- Retrieval size
-- Reranking size
-- File paths
+Contains the main RAG configuration.
 
 Example:
 
@@ -500,7 +478,20 @@ CHUNK_OVERLAP = 150
 
 RETRIEVAL_K = 10
 RERANK_TOP_N = 4
+
+PDF_PATH = "data/documents/orionworks_handbook.pdf"
+
+VECTORSTORE_PATH = "data/vectorstore"
 ```
+
+It also loads:
+
+```python
+OPENROUTER_API_KEY
+LLM_MODEL
+```
+
+from the environment.
 
 ---
 
@@ -508,70 +499,60 @@ RERANK_TOP_N = 4
 
 Responsible for preparing the knowledge base.
 
-Main workflow:
-
 ```text
 PDF
  |
  v
-Load Documents
+Load Pages
  |
  v
-Split into Chunks
+Create Chunks
  |
  v
 Generate Embeddings
  |
  v
-Build FAISS Vector Store
+Build FAISS Index
  |
  v
 Save Vector Store
 ```
 
-Run this script whenever the source PDF changes.
+Run this script when the PDF changes or when a new vector store needs to be generated.
 
 ---
 
 ## `src/retrieval.py`
 
-Responsible for:
-
-- Loading the embedding model.
-- Loading the FAISS vector store.
-- Retrieving relevant document chunks.
-
-Main workflow:
+Responsible for loading the embedding model and FAISS index and retrieving relevant chunks.
 
 ```text
 Question
    |
    v
-Question Embedding
+Embedding
    |
    v
-FAISS Similarity Search
+FAISS Search
    |
    v
-Retrieved Documents
+Top 10 Chunks
 ```
 
 ---
 
 ## `src/reranking.py`
 
-Responsible for reranking the initial retrieved documents using FlashRank.
-
-Main workflow:
+Responsible for reranking the documents retrieved from FAISS.
 
 ```text
-Retrieved Documents
+Top 10 FAISS Results
         |
         v
      FlashRank
         |
         v
-Top Relevant Documents
+     Best 4
 ```
 
 ---
@@ -580,33 +561,27 @@ Top Relevant Documents
 
 Responsible for:
 
-- Creating the LLM.
-- Creating the grounding prompt.
-- Formatting retrieved documents.
-- Generating the final answer.
-- Extracting source pages.
+- Creating the LLM
+- Creating the grounded prompt
+- Formatting retrieved context
+- Generating answers
+- Extracting source pages
 
 ---
 
 ## `app.py`
 
-The main Streamlit application.
+Provides the Streamlit user interface.
 
-It combines:
+The application includes:
 
-```text
-Retrieval
-+
-Reranking
-+
-Generation
-+
-Conversation State
-+
-User Interface
-```
-
-The UI is designed for normal employees rather than exposing technical implementation details such as FAISS, embedding dimensions, or reranking scores.
+- Search input
+- Conversational history
+- Suggested questions
+- Follow-up questions
+- New conversation button
+- Source pages
+- Expandable supporting information
 
 ---
 
@@ -618,7 +593,7 @@ The UI is designed for normal employees rather than exposing technical implement
 git clone <YOUR_GITHUB_REPOSITORY_URL>
 ```
 
-Move into the project directory:
+Move into the project:
 
 ```bash
 cd grounded-qa-assistant
@@ -628,7 +603,7 @@ cd grounded-qa-assistant
 
 ## 2. Create a Virtual Environment
 
-On Windows:
+### Windows
 
 ```bash
 python -m venv .venv
@@ -650,397 +625,9 @@ pip install -r requirements.txt
 
 ---
 
-# Environment Variables
+# Requirements
 
-Create a file named:
-
-```text
-.env
-```
-
-Add:
-
-```env
-OPENROUTER_API_KEY=your_api_key_here
-LLM_MODEL=your_model_here
-```
-
-Do not commit `.env` to GitHub.
-
-The API key should remain private.
-
----
-
-# Build the Vector Store
-
-Before running the application for the first time, build the FAISS vector store.
-
-Run:
-
-```bash
-python -m src.ingestion
-```
-
-Expected output:
-
-```text
-Loading PDF...
-Loaded 9 pages.
-
-Splitting documents...
-Created 33 chunks.
-
-Loading embedding model...
-
-Embedding dimension: 384
-
-Building FAISS vector store...
-
-Saving vector store...
-
-Ingestion completed successfully.
-```
-
-This creates:
-
-```text
-data/vectorstore/
-├── index.faiss
-└── index.pkl
-```
-
----
-
-# Run the Application
-
-Start the Streamlit application:
-
-```bash
-streamlit run app.py
-```
-
-The application will open in the browser.
-
-Users can then ask questions about the OrionWorks knowledge base.
-
----
-
-# Example Questions
-
-### Annual Leave
-
-```text
-How many annual leave days do I get?
-```
-
-### Carried-Over Leave
-
-```text
-Can I carry unused leave into the next year?
-```
-
-### Remote Work
-
-```text
-Can I work remotely during my first 60 days?
-```
-
-### Procurement
-
-```text
-How many quotations are required for a $12,000 purchase?
-```
-
-### Purchase Approval
-
-```text
-Who approves purchases above $25,000?
-```
-
-### Supplier Rules
-
-```text
-Do I need to contact a supplier before creating a purchase order?
-```
-
-### Travel
-
-```text
-What is the hotel reimbursement limit?
-```
-
-### Security
-
-```text
-What should I do after entering my credentials into a phishing site?
-```
-
-### Information Security
-
-```text
-Can I paste confidential client information into a public generative AI tool?
-```
-
-### Performance
-
-```text
-How often are formal performance reviews conducted?
-```
-
-### Internal Mobility
-
-```text
-How long must an employee wait before applying for an internal role?
-```
-
----
-
-# Handling Unknown Information
-
-A major requirement of the application is avoiding unsupported answers.
-
-If the user asks something that is not covered by the knowledge base, the assistant should not guess.
-
-For example:
-
-```text
-What is the company policy for working from Mars?
-```
-
-If the knowledge base contains no relevant information, the assistant should respond:
-
-```text
-The information is not stated in the OrionWorks knowledge base.
-```
-
-This behavior is important because the goal is to build a **grounded knowledge-base assistant**, not a general-purpose chatbot.
-
----
-
-# Conversation Support
-
-The application maintains conversation history using Streamlit session state.
-
-Users can ask multiple questions without starting a new chat.
-
-Example:
-
-```text
-User:
-How many annual leave days do I get?
-
-Assistant:
-A full-time employee receives 24 business days...
-
-User:
-Can I carry unused days into next year?
-
-Assistant:
-Up to 5 unused annual leave days may be carried over...
-
-User:
-When do they expire?
-
-Assistant:
-Carried-over days expire on 31 March.
-```
-
-The **New conversation** button clears the current conversation when the user wants to start again.
-
----
-
-# Retrieval Configuration
-
-The current configuration is:
-
-```python
-CHUNK_SIZE = 800
-CHUNK_OVERLAP = 150
-
-RETRIEVAL_K = 10
-RERANK_TOP_N = 4
-```
-
-## Chunk Size
-
-`CHUNK_SIZE` controls the approximate amount of text contained in each document chunk.
-
-A larger chunk provides more surrounding context but may contain more irrelevant information.
-
-A smaller chunk can provide more precise retrieval but may lose important surrounding context.
-
----
-
-## Chunk Overlap
-
-`CHUNK_OVERLAP` controls how much text is shared between neighboring chunks.
-
-The overlap helps preserve information that may otherwise be split between two chunks.
-
----
-
-## Retrieval K
-
-```python
-RETRIEVAL_K = 10
-```
-
-The system initially retrieves 10 candidate chunks from FAISS.
-
-The purpose of this stage is to provide a sufficiently broad candidate set for the reranker.
-
----
-
-## Rerank Top N
-
-```python
-RERANK_TOP_N = 4
-```
-
-After reranking, the system keeps the four most relevant chunks for the generation stage.
-
----
-
-# Why RAG?
-
-RAG is useful when the information being queried is:
-
-- Specific to an organization.
-- Stored in external documents.
-- Frequently updated.
-- Not necessarily present in the LLM's training data.
-- Required to be traceable to source documents.
-
-With RAG, the underlying documents can be updated and re-indexed without retraining the language model.
-
----
-
-# RAG vs Fine-Tuning
-
-This project uses **RAG rather than fine-tuning** because the main goal is retrieving factual information from a knowledge base.
-
-### RAG
-
-```text
-Documents
-    |
-    v
-Embeddings
-    |
-    v
-Vector Store
-    |
-    v
-Retrieve Relevant Context
-    |
-    v
-LLM
-```
-
-### Fine-Tuning
-
-```text
-Training Dataset
-    |
-    v
-Model Training
-    |
-    v
-Fine-Tuned Model
-```
-
-Fine-tuning is generally more useful for changing model behavior, style, or task-specific patterns.
-
-RAG is more suitable when the application needs to answer questions based on external documents and provide references to those documents.
-
----
-
-# Grounding Strategy
-
-The project uses several techniques to improve answer grounding.
-
-## 1. Retrieved Context
-
-The LLM receives relevant passages retrieved from the knowledge base.
-
-## 2. Explicit Prompt Instructions
-
-The prompt instructs the LLM:
-
-```text
-Use only information from the provided context.
-```
-
-## 3. No Outside Knowledge
-
-The model is explicitly instructed not to use information outside the supplied context.
-
-## 4. Unknown Answer Handling
-
-The model is instructed to state when the information is not available.
-
-## 5. Reranking
-
-FlashRank improves the ordering of retrieved passages before generation.
-
-## 6. Source Pages
-
-The application displays the PDF pages associated with the retrieved information.
-
----
-
-# Security Considerations
-
-The project uses an API key for the LLM provider.
-
-The key is stored in:
-
-```text
-.env
-```
-
-and excluded from Git using:
-
-```gitignore
-.env
-```
-
-The API key should never be included in:
-
-- Source code
-- GitHub repositories
-- README files
-- Screenshots
-- Public configuration files
-- Public deployment code
-
-The local vector store is also excluded from Git by default:
-
-```gitignore
-data/vectorstore/
-```
-
----
-
-# `.gitignore`
-
-The project uses the following `.gitignore`:
-
-```gitignore
-.env
-__pycache__/
-*.pyc
-.venv/
-data/vectorstore/
-```
-
-This prevents sensitive environment variables, Python cache files, the virtual environment, and the generated local vector store from being committed to the repository.
-
----
-
-# `requirements.txt`
-
-The project dependencies are:
+The project uses the following dependencies:
 
 ```text
 streamlit
@@ -1057,188 +644,524 @@ python-dotenv
 pandas
 ```
 
-Install them using:
+---
+
+# Environment Variables
+
+Create a `.env` file in the project root.
+
+```env
+OPENROUTER_API_KEY=your_openrouter_api_key
+LLM_MODEL=openrouter/free
+```
+
+Do not upload the `.env` file to GitHub.
+
+---
+
+# Build the Knowledge Base
+
+Before running the application for the first time, build the FAISS vector store.
 
 ```bash
-pip install -r requirements.txt
+python -m src.ingestion
 ```
+
+Example output:
+
+```text
+Loading PDF...
+Loaded 9 pages.
+
+Splitting documents...
+Created 33 chunks.
+
+Loading embedding model...
+Embedding dimension: 384
+
+Building FAISS vector store...
+
+Saving vector store...
+
+Ingestion completed successfully.
+```
+
+This generates:
+
+```text
+data/vectorstore/
+├── index.faiss
+└── index.pkl
+```
+
+---
+
+# Run the Application
+
+Start Streamlit:
+
+```bash
+streamlit run app.py
+```
+
+The application will normally open at:
+
+```text
+http://localhost:8501
+```
+
+---
+
+# Example Questions
+
+## Leave
+
+```text
+How many annual leave days do I receive?
+```
+
+```text
+Can I carry unused annual leave into the next year?
+```
+
+```text
+When does carried-over leave expire?
+```
+
+---
+
+## Remote Work
+
+```text
+Can I work remotely during my first month?
+```
+
+```text
+How many remote-working days are allowed per week?
+```
+
+```text
+Can I work remotely from another country?
+```
+
+---
+
+## Procurement
+
+```text
+How many quotations are required for a $12,000 purchase?
+```
+
+```text
+Who approves a purchase of $25,000 or more?
+```
+
+```text
+Can a supplier begin work before the Purchase Order is issued?
+```
+
+```text
+When is a sole-source justification required?
+```
+
+---
+
+## Business Travel
+
+```text
+What is the standard hotel cap?
+```
+
+```text
+When is a receipt required?
+```
+
+```text
+How long do I have to submit an expense report?
+```
+
+```text
+Can I claim mileage when using my own car?
+```
+
+---
+
+## IT and Security
+
+```text
+What is the minimum password length?
+```
+
+```text
+What should I do if I entered my password into a phishing website?
+```
+
+```text
+How quickly must a stolen laptop be reported?
+```
+
+```text
+Can confidential client information be pasted into a public AI chatbot?
+```
+
+---
+
+## Learning and Internal Mobility
+
+```text
+What is the annual learning allowance?
+```
+
+```text
+When can I apply for another internal role?
+```
+
+```text
+When are promotion reviews held?
+```
+
+---
+
+# Unknown Information Handling
+
+The assistant is designed not to invent answers when the knowledge base does not contain enough information.
+
+For example:
+
+```text
+What is the OrionWorks policy for company cars?
+```
+
+If no relevant company-car policy exists in the handbook, the expected response is:
+
+```text
+The information is not stated in the OrionWorks knowledge base.
+```
+
+---
+
+# Conversation Support
+
+The Streamlit application stores messages using session state.
+
+This allows users to ask multiple questions during the same session.
+
+Example:
+
+```text
+User:
+How many annual leave days do I receive?
+
+Assistant:
+Employees receive 24 business days of annual leave.
+
+User:
+Can I carry some into next year?
+
+Assistant:
+Yes. Up to 5 unused annual leave days may be carried over.
+
+User:
+When do they expire?
+
+Assistant:
+Carried-over annual leave expires on 31 March.
+```
+
+The user can select **New conversation** when they want to reset the current chat.
+
+---
+
+# Retrieval Configuration
+
+The current system uses:
+
+```python
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 150
+
+RETRIEVAL_K = 10
+RERANK_TOP_N = 4
+```
+
+### `CHUNK_SIZE`
+
+Controls the approximate amount of text in each searchable unit.
+
+### `CHUNK_OVERLAP`
+
+Allows neighboring chunks to share context.
+
+### `RETRIEVAL_K`
+
+Controls how many candidate chunks FAISS initially retrieves.
+
+### `RERANK_TOP_N`
+
+Controls how many reranked chunks are sent to the LLM.
+
+---
+
+# Why Use RAG?
+
+RAG is useful for organization-specific information because the LLM does not need to memorize the entire knowledge base.
+
+Instead:
+
+```text
+Knowledge Base
+      |
+      v
+Retrieval
+      |
+      v
+Relevant Information
+      |
+      v
+LLM
+```
+
+This provides several benefits:
+
+- Company information can be updated without retraining the LLM.
+- Answers can be linked to source documents.
+- Less irrelevant context needs to be passed to the model.
+- The system can work with private or organization-specific information.
+- Hallucination risk can be reduced through grounding.
+
+---
+
+# RAG vs Fine-Tuning
+
+This project uses RAG instead of fine-tuning because the goal is to provide access to factual information stored in a document.
+
+## RAG
+
+```text
+Documents
+   |
+   v
+Embeddings
+   |
+   v
+Vector Store
+   |
+   v
+Retrieval
+   |
+   v
+LLM
+```
+
+## Fine-Tuning
+
+```text
+Training Examples
+      |
+      v
+Model Training
+      |
+      v
+Modified Model
+```
+
+Fine-tuning is generally better suited for changing model behavior or teaching task patterns.
+
+RAG is better suited for accessing changing external knowledge.
+
+---
+
+# Grounding Strategy
+
+Several techniques are used to improve answer grounding.
+
+## Retrieved Context
+
+Only relevant document passages are passed to the LLM.
+
+## Explicit Prompt Rules
+
+The prompt tells the LLM to use only the supplied information.
+
+## Unknown-Answer Instruction
+
+The model is instructed not to guess when the answer is unavailable.
+
+## Reranking
+
+The strongest retrieved passages are prioritized before generation.
+
+## Page Metadata
+
+Retrieved documents retain their original PDF page numbers.
+
+## Supporting Information
+
+Users can inspect the passages used by the system.
+
+---
+
+# Security
+
+The OpenRouter API key is stored in:
+
+```text
+.env
+```
+
+and should never be committed to the repository.
+
+Recommended `.gitignore`:
+
+```gitignore
+.env
+__pycache__/
+*.pyc
+.venv/
+data/vectorstore/
+```
+
+Never expose API keys in:
+
+- Source code
+- GitHub repositories
+- Screenshots
+- README files
+- Public configuration
 
 ---
 
 # Limitations
 
-This project is designed as a RAG learning and demonstration project.
+The current project has several limitations:
 
-Current limitations include:
-
-- The knowledge base is a synthetic document.
-- The system depends on retrieval quality.
-- Incorrect retrieval can affect the generated answer.
+- OrionWorks is a fictional company.
+- The project currently uses one PDF knowledge base.
+- Retrieval quality depends on the embedding model and chunking strategy.
 - Reranking improves relevance but does not guarantee perfect retrieval.
-- The assistant can only answer from information available in the knowledge base.
-- The LLM requires a valid API configuration.
-- Page citations correspond to the original PDF pages containing retrieved chunks.
-- The current application uses a single knowledge base.
+- The LLM may still produce imperfect responses.
+- The assistant is limited to the information contained in the knowledge base.
+- Page citations identify retrieved source pages rather than sentence-level citations.
+- The current conversation interface stores history for the active Streamlit session.
 
 ---
 
-# Future Improvements
+# Possible Future Improvements
 
-Possible future improvements include:
+Future versions could include:
 
-- Supporting multiple PDFs.
-- Adding metadata filtering.
-- Adding hybrid keyword + semantic search.
-- Improving citation formatting.
-- Adding query rewriting.
-- Adding conversation-aware retrieval.
-- Adding document version management.
-- Adding authentication.
-- Improving the Streamlit interface.
-- Comparing different embedding models.
-- Comparing different chunking strategies.
-- Comparing retrieval with and without reranking.
-- Adding a larger evaluation dataset.
-- Deploying the application for real users.
-
----
-
-# Project Workflow
-
-The complete system follows this workflow:
-
-```text
-                     INGESTION
-                         |
-                         v
-              Load OrionWorks PDF
-                         |
-                         v
-                  Split into Chunks
-                         |
-                         v
-                Generate Embeddings
-                         |
-                         v
-                  Build FAISS Index
-                         |
-                         v
-                  Save Vector Store
-                         |
-                         |
-                         v
-                       QUERY
-                         |
-                         v
-                   User Question
-                         |
-                         v
-                Semantic Retrieval
-                         |
-                         v
-                   Top 10 Chunks
-                         |
-                         v
-                     FlashRank
-                         |
-                         v
-                    Top 4 Chunks
-                         |
-                         v
-                  Grounded Prompt
-                         |
-                         v
-                        LLM
-                         |
-                         v
-                   Final Answer
-                         |
-                         v
-                    Source Pages
-```
+- Multiple PDF support
+- Automatic document ingestion
+- Hybrid keyword and semantic search
+- Metadata filtering
+- Conversation-aware query rewriting
+- Improved source citation formatting
+- Highlighted supporting sentences
+- Authentication
+- Role-based document access
+- Persistent chat history
+- Document versioning
+- Larger evaluation datasets
+- Automated RAG evaluation
+- Different embedding model comparisons
+- Different chunking experiments
+- Retrieval performance dashboards
+- Cloud deployment
 
 ---
 
 # Project Status
 
-The current implementation includes:
+Current implementation:
 
-- [x] PDF document loading
-- [x] Document chunking
-- [x] Local embedding generation
-- [x] FAISS vector store
+- [x] PDF ingestion
+- [x] PDF page metadata
+- [x] Recursive text chunking
+- [x] BGE embeddings
+- [x] FAISS vector search
 - [x] Semantic retrieval
 - [x] FlashRank reranking
-- [x] Grounded LLM generation
-- [x] Source page extraction
-- [x] Streamlit interface
+- [x] Top-4 context selection
+- [x] OpenRouter LLM generation
+- [x] Grounded prompt
+- [x] Unknown-information handling
+- [x] PDF page citations
+- [x] Supporting source excerpts
+- [x] Streamlit application
 - [x] Conversation history
 - [x] Suggested questions
-- [x] Supporting information section
-- [x] Environment variable configuration
-- [x] End-to-end RAG pipeline
+- [x] New conversation functionality
 
 ---
 
 # Key Learning Outcomes
 
-This project demonstrates practical understanding of the main components of a Retrieval-Augmented Generation system.
+This project demonstrates the main components of a practical RAG application.
 
-### Document Processing
+## Document Ingestion
 
-Loading a source document and transforming it into smaller searchable chunks.
+Loading raw documents and preserving useful metadata.
 
-### Embeddings
+## Chunking
 
-Representing text as numerical vectors that capture semantic meaning.
+Breaking large documents into retrieval-friendly units.
 
-### Vector Search
+## Embeddings
 
-Using FAISS to retrieve document chunks that are semantically related to a user's question.
+Representing semantic meaning using numerical vectors.
 
-### Retrieval
+## Vector Databases
 
-Selecting potentially relevant information before sending context to the language model.
+Using FAISS to perform efficient similarity search.
 
-### Reranking
+## Retrieval
 
-Using a dedicated reranker to improve the relevance ordering of retrieved passages.
+Finding document passages related to a user's question.
 
-### Grounded Generation
+## Reranking
 
-Providing retrieved source context to an LLM so that the generated answer is based on the knowledge base.
+Improving the ordering of retrieved passages before generation.
 
-### Citations
+## Grounded Generation
 
-Connecting the generated answer back to the original PDF pages.
+Providing retrieved evidence to an LLM instead of asking it to answer from memory alone.
 
-### Application Development
+## Citations
 
-Turning the RAG pipeline into a usable conversational application using Streamlit.
+Connecting generated answers back to source pages.
+
+## Application Development
+
+Turning a RAG pipeline into a user-facing conversational application with Streamlit.
 
 ---
 
 # Conclusion
 
-The **OrionWorks Grounded Q&A Assistant** demonstrates a complete end-to-end Retrieval-Augmented Generation workflow.
-
-Instead of relying on an LLM alone, the system combines:
+The **OrionWorks Grounded Q&A Assistant** demonstrates a complete Retrieval-Augmented Generation pipeline:
 
 ```text
-Document Processing
-        +
-Semantic Embeddings
-        +
-Vector Search
-        +
-Reranking
-        +
-Grounded Generation
-        +
-Source Citations
+PDF
+ |
+ v
+Chunking
+ |
+ v
+Embeddings
+ |
+ v
+FAISS Retrieval
+ |
+ v
+FlashRank Reranking
+ |
+ v
+Grounded LLM Generation
+ |
+ v
+Answer + Sources
 ```
 
-This approach provides a practical way to build question-answering applications over specific knowledge bases while keeping generated answers grounded in retrieved source information.
+The project shows how retrieval, reranking, grounding, and source attribution can be combined to create a practical knowledge-base assistant.
 
-The project provides a foundation for building more advanced RAG systems over larger and more diverse document collections.#   g r o u n d e d - q a - a s i s t a n t  
- 
+Rather than relying on an LLM alone, the system connects the model to a specific source of trusted information and provides users with the evidence behind each answer.
